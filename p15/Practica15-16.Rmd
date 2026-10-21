@@ -1,0 +1,202 @@
+---
+title: "Práctica 15 y 16: Visualización de datos con ggplot2"
+subtitle: "Tema 5 — La presentación del dato"
+author: "GalexY3"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    self_contained: true
+---
+
+<div style="text-align:center; padding:10px; background:#eef; border-radius:6px; margin-bottom:1em;">
+<strong>Repositorio del proyecto:</strong>
+<a href="https://github.com/GalexY3/p15">https://github.com/GalexY3/p15</a>
+</div>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+# Preparación del entorno
+
+Cargamos las librerías necesarias y los datos del estudio poselectoral CIS sobre las elecciones de junio de 2016 (`cis3145t.sav`).
+
+```{r librerias}
+library(sjmisc)
+library(tidyverse)
+library(ggthemes)
+library(gridExtra)
+```
+
+```{r datos}
+d <- foreign::read.spss("cis3145t.sav", to.data.frame = TRUE)
+```
+
+## Transformación de variables
+
+Construimos los índices de **confianza en instituciones públicas** (`confpub`) y **privadas** (`confpriv`) sumando los items correspondientes (excluyendo no respuestas, codificadas con valores > 97). También recodificamos la variable de voto en 2016 en tres categorías: *Voto*, *No voto* y *NC*.
+
+```{r recodificacion}
+d <- mutate(d,
+  confpub  = ifelse(confparl > 97 | confpart > 97 | confjudic > 97, NA,
+                    confparl + confpart + confjudic),
+  confpriv = ifelse(confong  > 97 | confbanco > 97 | confmedia > 97, NA,
+                    confbanco + confong + confmedia)
+)
+
+d$urnas16r <- recode(d$voto16,
+                     "NoVoto" = "No voto",
+                     "NC"     = "NC",
+                     .default = "Voto")
+```
+
+---
+
+# Gráfico 1 — Edad y confianza pública por clase social
+
+Diagrama de dispersión de la **edad** frente a la **confianza en instituciones públicas**, dividido en *facets* por categoría de **estatus social** (`esta`), con recta de regresión lineal en cada panel.
+
+```{r grafico1, fig.width=9, fig.height=6}
+g1 <- ggplot(d, aes(x = as.numeric(edad), y = confpub)) +
+  geom_point(position = "jitter", alpha = .3, shape = 1) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ esta) +
+  labs(
+    x = "Edad",
+    y = "Confianza en las instituciones públicas",
+    title = "G1. Relación entre edad y confianza en las instituciones públicas\npor clase social"
+  )
+g1
+```
+
+---
+
+# Gráfico 2 — Voto en 2016 por estatus social
+
+Comparación de cuatro maneras de representar la misma información (estatus social × comportamiento electoral) cambiando el argumento `position` del `geom_bar()`.
+
+```{r grafico2_base}
+d2 <- filter(d, !is.na(urnas16r))
+g2 <- ggplot(d2, aes(x = esta, fill = urnas16r))
+```
+
+```{r grafico2_variantes}
+etiquetas <- c("Alta", "Viejas Med", "Nuevas Med.", "Obr. cual", "Obr. no cual", "NC")
+
+g2a <- g2 + geom_bar() +
+  scale_x_discrete(labels = etiquetas) +
+  labs(x = "", y = "", fill = "")
+
+g2b <- g2 + geom_bar(position = "stack") +
+  scale_x_discrete(labels = etiquetas) +
+  labs(x = "", y = "", fill = "")
+
+g2c <- g2 + geom_bar(position = "dodge") +
+  scale_x_discrete(labels = etiquetas) +
+  labs(x = "", y = "", fill = "")
+
+g2d <- g2 + geom_bar(position = "fill") +
+  scale_x_discrete(labels = etiquetas) +
+  labs(x = "", y = "", fill = "")
+```
+
+```{r grafico2_combinado, fig.width=10, fig.height=7}
+grid.arrange(g2a, g2b, g2c, g2d,
+             ncol = 2,
+             top = quote("G2. Voto en 2016 por estatus social"))
+```
+
+**Comentario.** Los dos primeros gráficos (default y `stack`) son equivalentes y muestran totales absolutos. `dodge` separa las barras y permite comparar conteos. `fill` normaliza al 100 % cada barra: es el más adecuado para comparar la **proporción** de votantes y abstencionistas dentro de cada clase social, que era el objetivo planteado.
+
+---
+
+# Gráfico 3 — Confianza pública vs. privada por voto
+
+Dispersión de `confpub` frente a `confpriv`, distinguida por comportamiento electoral, con recta de regresión por subgrupo y una recta general para el total. Se aplica un tema personalizado.
+
+```{r grafico3, fig.width=9, fig.height=6}
+g3 <- ggplot(filter(d, urnas16r != "NC"),
+             aes(x = confpub, y = confpriv, col = urnas16r)) +
+  geom_point(position = position_jitter(.1), alpha = .3, shape = 1) +
+  stat_smooth(method = "lm") +
+  stat_smooth(method = "lm", aes(col = factor(1))) +
+  scale_colour_manual(values = c("red", "black", "skyblue"),
+                      labels = c("Total", "No votó", "Votó")) +
+  labs(x = "Confianza instituciones privadas",
+       y = "Confianza en instituciones públicas",
+       col = "Elecciones 2016",
+       title = "G3. Confianza en instituciones públicas y privadas") +
+  theme(legend.position = "bottom",
+        legend.title    = element_blank(),
+        panel.grid      = element_blank(),
+        axis.text       = element_text(colour = "gray"),
+        axis.title      = element_text(colour = "gray"),
+        axis.line       = element_line(colour = "gray"),
+        axis.ticks      = element_line(colour = "gray"),
+        panel.background = element_rect(fill = "white"),
+        plot.title       = element_text(color = "gray31"))
+g3
+```
+
+---
+
+# Gráfico 4 — Distribuciones de confianza pública y privada
+
+Histogramas y densidades superpuestos para comparar las distribuciones de `confpub` y `confpriv`. Probamos distintos *temas* predefinidos del paquete `ggthemes`.
+
+```{r grafico4_base}
+g4 <- ggplot(filter(d, !is.na(confpub), !is.na(confpriv))) +
+  geom_histogram(aes(x = confpub,  y = ..density.., fill = "skyblue"),
+                 alpha = 0.2, bins = 30) +
+  geom_histogram(aes(x = confpriv, y = ..density.., fill = "red"),
+                 alpha = 0.2, bins = 30) +
+  geom_density(aes(x = confpub,  col = "skyblue")) +
+  geom_density(aes(x = confpriv, col = "red")) +
+  scale_fill_discrete(labels  = c("Privadas", "Públicas"), name = "") +
+  scale_color_discrete(labels = c("Privadas", "Públicas"), name = "") +
+  labs(x = "", y = "",
+       title = "G4. Distribuciones de confianza en instituciones\npúblicas y privadas")
+```
+
+## Variantes con distintos *themes*
+
+```{r g4_economist, fig.width=8, fig.height=5}
+g4 + theme_economist() + ggtitle("G4 — theme_economist()")
+```
+
+```{r g4_fivethirtyeight, fig.width=8, fig.height=5}
+g4 + theme_fivethirtyeight() + ggtitle("G4 — theme_fivethirtyeight()")
+```
+
+```{r g4_wsj, fig.width=8, fig.height=5}
+g4 + theme_wsj() + ggtitle("G4 — theme_wsj()")
+```
+
+```{r g4_few, fig.width=8, fig.height=5}
+g4 + theme_few() + ggtitle("G4 — theme_few()")
+```
+
+```{r g4_tufte, fig.width=8, fig.height=5}
+g4 + theme_tufte() + ggtitle("G4 — theme_tufte()")
+```
+
+---
+
+# Conclusiones
+
+- Las **facets** (G1) permiten descomponer una relación bivariada en función de una tercera variable categórica de forma muy legible.
+- La elección del argumento `position` en `geom_bar()` (G2) cambia radicalmente el mensaje del gráfico; `position = "fill"` es la mejor opción cuando interesa comparar **proporciones**.
+- En G3 hemos visto cómo combinar varias capas `stat_smooth()` y construir un **tema personalizado** modificando uno a uno los elementos (`element_text`, `element_line`, `element_rect`, `element_blank`).
+- En G4 los **temas predefinidos** de `ggthemes` ofrecen una vía rápida para dar un acabado profesional sin tener que ajustar manualmente cada elemento.

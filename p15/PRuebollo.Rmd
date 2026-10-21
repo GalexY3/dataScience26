@@ -1,0 +1,15 @@
+---
+title: "macaquiño"
+author: "Alejandro Panera"
+date: "2026-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+#### QUIERO COMER UN BOLLO
+Uno de chocolate, mu bueno mu bueno
